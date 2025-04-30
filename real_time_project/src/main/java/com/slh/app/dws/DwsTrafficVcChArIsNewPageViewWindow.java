@@ -2,11 +2,11 @@ package com.slh.app.dws;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.stream.realtime.bean.TrafficVcChArIsNewPageViewBean;
-import com.stream.realtime.function.BeanToJsonStrMapFunction;
-import com.stream.realtime.utils.DateFormatUtil;
-import com.stream.realtime.utils.FlinkSinkUtil;
-import com.stream.realtime.utils.FlinkSourceUtil;
+import com.slh.bean.TrafficVcChArIsNewPageViewBean;
+import com.slh.function.BeanToJsonStrMapFunction;
+import com.slh.utils.DateFormatUtil;
+import com.slh.utils.FlinkSinkUtil;
+import com.slh.utils.FlinkSourceUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;

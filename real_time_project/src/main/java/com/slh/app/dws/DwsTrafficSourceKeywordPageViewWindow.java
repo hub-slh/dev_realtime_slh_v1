@@ -1,9 +1,10 @@
 package com.slh.app.dws;
 
 
-import com.stream.realtime.constant.Constant;
-import com.stream.realtime.function.KeywordUDTF;
-import com.stream.realtime.utils.SQLUtil;
+
+import com.slh.constant.Constant;
+import com.slh.function.KeywordUDTF;
+import com.slh.utils.SQLUtil;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
