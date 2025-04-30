@@ -8,6 +8,9 @@
     <artifactId>dev_realtime_slh_v1</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
+    <modules>
+        <module>real_time_project</module>
+    </modules>
 
     <properties>
         <java.version>1.8</java.version>
