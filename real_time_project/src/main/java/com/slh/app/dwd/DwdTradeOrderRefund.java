@@ -13,7 +13,7 @@ import java.time.Duration;
  * @Package com.stream.realtime.app.dwd.DwdTradeOrderRefund
  * @Author song.lihao
  * @Date 2025/4/23 16:52
- * @description:
+ * @description:数据仓库明细表 订单退款表
  */
 public class DwdTradeOrderRefund {
     public static void main(String[] args) throws Exception {

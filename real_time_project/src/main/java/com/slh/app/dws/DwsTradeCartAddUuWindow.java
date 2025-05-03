@@ -32,9 +32,9 @@ import org.apache.flink.util.Collector;
 
 /**
  * @Package com.zzw.stream.realtime.v1.app.dws.DwsTradeCartAddUuWindow
- * @Author zhengwei_zhou
- * @Date 2025/4/21 9:36
- * @description: DwsTradeCartAddUuWindow
+ * @Author lihao_song
+ * @Date 2025/5/3 14:46
+ * @description: DwsTradeCartAddUuWindow 交易购物车添加Uu窗口
  */
 
 public class DwsTradeCartAddUuWindow {

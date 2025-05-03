@@ -14,7 +14,7 @@ import java.time.Duration;
  * @Package com.stream.realtime.app.dwd.DwdTradeRefundPaySucDetail
  * @Author song.lihao
  * @Date 2025/4/23 16:53
- * @description:
+ * @description:数据仓库明细层 退款支付成功详情表
  */
 public class DwdTradeRefundPaySucDetail {
     public static void main(String[] args) throws Exception {

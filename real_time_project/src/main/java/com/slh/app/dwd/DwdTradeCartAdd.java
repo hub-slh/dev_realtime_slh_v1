@@ -12,7 +12,7 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
  * @Package com.stream.realtime.app.dwd.DwdTradeCartAdd
  * @Author song.lihao
  * @Date 2025/4/23 16:46
- * @description:
+ * @description:数据仓库明细层 购物车添加表
  */
 public class DwdTradeCartAdd {
     public static void main(String[] args) throws Exception{

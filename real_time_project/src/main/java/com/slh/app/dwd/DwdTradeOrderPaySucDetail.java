@@ -14,7 +14,7 @@ import java.time.Duration;
  * @Package com.stream.realtime.app.dwd.DwdTradeOrderPaySucDetail
  * @Author song.lihao
  * @Date 2025/4/23 16:51
- * @description:
+ * @description:数据仓库明细层 订单支付成功详情表
  */
 public class DwdTradeOrderPaySucDetail {
     public static void main(String[] args) throws Exception {

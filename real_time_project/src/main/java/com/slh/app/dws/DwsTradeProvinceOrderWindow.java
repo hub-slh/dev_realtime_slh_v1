@@ -41,9 +41,9 @@ import java.util.HashSet;
 
 /**
  * @Package com.lzy.stream.realtime.v1.app.dws.DwsTradeProvinceOrderWindow
- * @Author zhengwei_zhou
- * @Date 2025/4/21 14:56
- * @description: DwsTradeProvinceOrderWindow
+ * @Author lihao_song
+ * @Date 2025/5/0 14:47
+ * @description: DwsTradeProvinceOrderWindow 交易省份订单窗口
  */
 
 public class DwsTradeProvinceOrderWindow {

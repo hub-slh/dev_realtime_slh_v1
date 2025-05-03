@@ -32,9 +32,9 @@ import org.apache.flink.util.Collector;
 
 /**
  * @Package com.lzy.stream.realtime.v1.app.dws.DwsUserUserLoginWindow
- * @Author zhengwei_zhou
+ * @Author lihao_song
  * @Date 2025/4/21 9:56
- * @description: DwsUserUserLoginWindow
+ * @description: DwsUserUserLoginWindow 用户登录窗口
  */
 
 public class DwsUserUserLoginWindow {

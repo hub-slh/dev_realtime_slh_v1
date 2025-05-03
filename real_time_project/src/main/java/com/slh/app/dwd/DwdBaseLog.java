@@ -30,7 +30,7 @@ import java.util.Map;
  * @Package com.stream.realtime.app.dwd.DwdBaseLog
  * @Author song.lihao
  * @Date 2025/4/23 16:24
- * @description:
+ * @description: 数据仓库明细层基础日志表
  */
 public class DwdBaseLog {
     private static final String START = "start";

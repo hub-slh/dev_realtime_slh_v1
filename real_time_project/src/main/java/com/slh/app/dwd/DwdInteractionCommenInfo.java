@@ -12,7 +12,7 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
  * @Package com.stream.realtime.app.dwd.DwdInteractionCommenInfo
  * @Author song.lihao
  * @Date 2025/4/23 16:38
- * @description:
+ * @description: 数据仓库明细层 互动评论信息表
  */
 public class DwdInteractionCommenInfo {
     public static void main(String[] args) throws Exception {
@@ -78,7 +78,7 @@ public class DwdInteractionCommenInfo {
                 "    PRIMARY KEY (id) NOT ENFORCED \n" +
                 ") " + SQLUtil.getUpsertKafkaDDL(Constant.TOPIC_DWD_INTERACTION_COMMENT_INFO));
         // 写入
-        joinedTable.executeInsert(Constant.TOPIC_DWD_INTERACTION_COMMENT_INFO);
+//        joinedTable.executeInsert(Constant.TOPIC_DWD_INTERACTION_COMMENT_INFO);
 
         env.execute("DwdInteractionCommenInfo");
     }

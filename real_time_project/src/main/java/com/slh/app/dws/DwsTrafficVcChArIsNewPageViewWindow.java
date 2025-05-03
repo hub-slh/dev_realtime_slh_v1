@@ -36,7 +36,7 @@ import org.apache.flink.util.Collector;
  * @Package com.lzy.stream.realtime.v1.app.dws.DwsTrafficVcChArIsNewPageViewWindow
  * @Author zhengwei_zhou
  * @Date 2025/4/21 9:37
- * @description: DwsTrafficVcChArIsNewPageViewWindow
+ * @description: DwsTrafficVcChArIsNewPageViewWindow 流量VcChArls新页面浏览窗口
  */
 
 public class DwsTrafficVcChArIsNewPageViewWindow {

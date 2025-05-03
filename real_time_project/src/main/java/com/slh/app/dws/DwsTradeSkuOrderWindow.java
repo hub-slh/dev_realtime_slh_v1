@@ -37,9 +37,9 @@ import java.math.BigDecimal;
 
 /**
  * @Package com.lzy.stream.realtime.v1.app.dws.DwsTradeSkuOrderWindow
- * @Author zhengwei_zhou
+ * @Author lihao_song
  * @Date 2025/4/18 13:52
- * @description: DwsTradeSkuOrderWindow
+ * @description: DwsTradeSkuOrderWindow 交易库存单位订单窗口
  */
 
 public class DwsTradeSkuOrderWindow {
@@ -69,8 +69,8 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-        //jsonObjDS.print();
-
+//        jsonObjDS.print();
+//
         KeyedStream<JSONObject, String> orderDetailIdKeyedDS = jsonObjDS.keyBy(jsonObj -> jsonObj.getString("id"));
 
         SingleOutputStreamOperator<JSONObject> distinctDS = orderDetailIdKeyedDS.process(
@@ -127,7 +127,7 @@ public class DwsTradeSkuOrderWindow {
         );
 
 //        withWatermarkDS.print();
-
+//
         SingleOutputStreamOperator<TradeSkuOrderBean> beanDS = withWatermarkDS.map(
                 new MapFunction<JSONObject, TradeSkuOrderBean>() {
                     @Override
@@ -156,7 +156,7 @@ public class DwsTradeSkuOrderWindow {
         );
 
 //        beanDS.print();
-
+//
 
         //TODO 6.分组
         KeyedStream<TradeSkuOrderBean, String> skuIdKeyedDS = beanDS
@@ -198,7 +198,6 @@ public class DwsTradeSkuOrderWindow {
 
         SingleOutputStreamOperator<TradeSkuOrderBean> withSpuInfoDS = reduceDS.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
-
                     private Connection hbaseConn;
 
                     @Override
@@ -212,24 +211,30 @@ public class DwsTradeSkuOrderWindow {
                     }
 
                     @Override
-                    public TradeSkuOrderBean map(TradeSkuOrderBean orderBean) {
-                        if (orderBean.getSpuId() != null) {
-                            JSONObject skuInfoJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE, "dim_spu_info", orderBean.getSpuId(), JSONObject.class);
-                            if (skuInfoJsonObj!=null) {
-                                orderBean.setSpuName(skuInfoJsonObj.getString("spu_name"));
+                    public TradeSkuOrderBean map(TradeSkuOrderBean orderBean) throws Exception {
+                        try {
+                            if (orderBean.getSkuId() != null) {  // 使用skuId而不是spuId
+                                JSONObject skuInfoJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
+                                        "dim_sku_info", orderBean.getSkuId(), JSONObject.class);
+                                if (skuInfoJsonObj != null) {
+                                    orderBean.setSpuId(skuInfoJsonObj.getString("spu_id"));
+                                    orderBean.setSpuName(skuInfoJsonObj.getString("spu_name"));
+                                    orderBean.setTrademarkId(skuInfoJsonObj.getString("tm_id"));
+                                    orderBean.setCategory3Id(skuInfoJsonObj.getString("category3_id"));
+                                }
                             }
+                        } catch (Exception e) {
+                            // 记录错误日志但继续处理
+                            System.err.println("Error getting sku info for skuId: " + orderBean.getSkuId() + ", " + e.getMessage());
                         }
                         return orderBean;
                     }
                 }
         );
-//
-//        withSpuInfoDS.print();
-//
+
+        // 修改后的withTmDS部分
         SingleOutputStreamOperator<TradeSkuOrderBean> withTmDS = withSpuInfoDS.map(
-
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
-
                     private Connection hbaseConn;
 
                     @Override
@@ -244,20 +249,26 @@ public class DwsTradeSkuOrderWindow {
 
                     @Override
                     public TradeSkuOrderBean map(TradeSkuOrderBean orderBean) throws Exception {
-                        String spuId = orderBean.getTrademarkId();
-                        JSONObject skuInfoJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE, "dim_base_trademark", spuId, JSONObject.class);
-                        if (skuInfoJsonObj != null) {
-                            orderBean.setTrademarkName(skuInfoJsonObj.getString("tm_name"));
+                        try {
+                            String tmId = orderBean.getTrademarkId();
+                            if (tmId != null) {
+                                JSONObject tmJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
+                                        "dim_base_trademark", tmId, JSONObject.class);
+                                if (tmJsonObj != null) {
+                                    orderBean.setTrademarkName(tmJsonObj.getString("tm_name"));
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error getting trademark info: " + e.getMessage());
                         }
                         return orderBean;
                     }
                 }
         );
 
+        // 修改后的c3Stream部分
         SingleOutputStreamOperator<TradeSkuOrderBean> c3Stream = withTmDS.map(
-
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
-
                     private Connection hbaseConn;
 
                     @Override
@@ -272,20 +283,27 @@ public class DwsTradeSkuOrderWindow {
 
                     @Override
                     public TradeSkuOrderBean map(TradeSkuOrderBean orderBean) throws Exception {
-                        String spuId = orderBean.getCategory3Id();
-                        JSONObject skuInfoJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE, "dim_base_category3", spuId, JSONObject.class);
-                        if (skuInfoJsonObj != null) {
-                            orderBean.setCategory3Name(skuInfoJsonObj.getString("name"));
-                            orderBean.setCategory2Id(skuInfoJsonObj.getString("category2_id"));
+                        try {
+                            String category3Id = orderBean.getCategory3Id();
+                            if (category3Id != null) {
+                                JSONObject c3JsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
+                                        "dim_base_category3", category3Id, JSONObject.class);
+                                if (c3JsonObj != null) {
+                                    orderBean.setCategory3Name(c3JsonObj.getString("name"));
+                                    orderBean.setCategory2Id(c3JsonObj.getString("category2_id"));
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error getting category3 info: " + e.getMessage());
                         }
                         return orderBean;
                     }
                 }
         );
+
+        // 修改后的c2Stream部分
         SingleOutputStreamOperator<TradeSkuOrderBean> c2Stream = c3Stream.map(
-
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
-
                     private Connection hbaseConn;
 
                     @Override
@@ -300,20 +318,27 @@ public class DwsTradeSkuOrderWindow {
 
                     @Override
                     public TradeSkuOrderBean map(TradeSkuOrderBean orderBean) throws Exception {
-                        String spuId = orderBean.getCategory2Id();
-                        JSONObject skuInfoJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE, "dim_base_category2", spuId, JSONObject.class);
-                        if (skuInfoJsonObj != null) {
-                            orderBean.setCategory2Name(skuInfoJsonObj.getString("name"));
-                            orderBean.setCategory1Id(skuInfoJsonObj.getString("category1_id"));
+                        try {
+                            String category2Id = orderBean.getCategory2Id();
+                            if (category2Id != null) {
+                                JSONObject c2JsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
+                                        "dim_base_category2", category2Id, JSONObject.class);
+                                if (c2JsonObj != null) {
+                                    orderBean.setCategory2Name(c2JsonObj.getString("name"));
+                                    orderBean.setCategory1Id(c2JsonObj.getString("category1_id"));
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error getting category2 info: " + e.getMessage());
                         }
                         return orderBean;
                     }
                 }
         );
+
+        // 修改后的c1Stream部分
         SingleOutputStreamOperator<TradeSkuOrderBean> c1Stream = c2Stream.map(
-
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
-
                     private Connection hbaseConn;
 
                     @Override
@@ -328,22 +353,28 @@ public class DwsTradeSkuOrderWindow {
 
                     @Override
                     public TradeSkuOrderBean map(TradeSkuOrderBean orderBean) throws Exception {
-                        String spuId = orderBean.getCategory1Id();
-                        JSONObject skuInfoJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE, "dim_base_category1", spuId, JSONObject.class);
-                        if (skuInfoJsonObj != null) {
-                            orderBean.setCategory1Name(skuInfoJsonObj.getString("name"));
+                        try {
+                            String category1Id = orderBean.getCategory1Id();
+                            if (category1Id != null) {
+                                JSONObject c1JsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
+                                        "dim_base_category1", category1Id, JSONObject.class);
+                                if (c1JsonObj != null) {
+                                    orderBean.setCategory1Name(c1JsonObj.getString("name"));
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error getting category1 info: " + e.getMessage());
                         }
                         return orderBean;
                     }
                 }
         );
-//
-        SingleOutputStreamOperator<String> jsonOrder = c1Stream.map(new BeanToJsonStrMapFunction<>());
-//
-        jsonOrder.print();
-//
-        jsonOrder.sinkTo(FlinkSinkUtil.getDorisSink("dws_trade_sku_order_window"));
 
+        SingleOutputStreamOperator<String> jsonOrder = c1Stream.map(new BeanToJsonStrMapFunction<>());
+
+        jsonOrder.print();
+
+        jsonOrder.sinkTo(FlinkSinkUtil.getDorisSink("dws_trade_sku_order_window"));
 //
         env.execute("DwsTradeSkuOrderWindow");
     }
