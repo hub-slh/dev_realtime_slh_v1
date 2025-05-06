@@ -9,8 +9,8 @@ import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 
 /**
- * @Package com.stream.realtime.app.dwd.DwdInteractionCommenInfo
- * @Author song.lihao
+ * @Package com.slh.app.dwd.DwdInteractionCommenInfo
+ * @Author lihao_song
  * @Date 2025/4/23 16:38
  * @description: 数据仓库明细层 互动评论信息表
  */
@@ -42,7 +42,7 @@ public class DwdInteractionCommenInfo {
                 "     ts_ms " +
                 "     from topic_db where source['table'] = 'comment_info' and op = 'r'");
 //        commentInfo.execute().print();
-
+//
         tableEnv.createTemporaryView("comment_info",commentInfo);
 
 
@@ -64,6 +64,7 @@ public class DwdInteractionCommenInfo {
                 "    FROM comment_info AS c\n" +
                 "    JOIN base_dic AS dic\n" +
                 "    ON c.appraise = dic.dic_code");
+
 //        joinedTable.execute().print();
 
 //        创建动态表和要写入的主题进行映射
@@ -78,7 +79,7 @@ public class DwdInteractionCommenInfo {
                 "    PRIMARY KEY (id) NOT ENFORCED \n" +
                 ") " + SQLUtil.getUpsertKafkaDDL(Constant.TOPIC_DWD_INTERACTION_COMMENT_INFO));
         // 写入
-//        joinedTable.executeInsert(Constant.TOPIC_DWD_INTERACTION_COMMENT_INFO);
+        joinedTable.executeInsert(Constant.TOPIC_DWD_INTERACTION_COMMENT_INFO);
 
         env.execute("DwdInteractionCommenInfo");
     }

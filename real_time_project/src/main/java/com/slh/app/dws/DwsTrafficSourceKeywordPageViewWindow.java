@@ -10,8 +10,8 @@ import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 
 /**
- * @Package com.lzy.stream.realtime.v1.app.dws.DwsTrafficSourceKeywordPageViewWindow
- * @Author zhengwei_zhou
+ * @Package com.slh.app.dws.DwsTrafficSourceKeywordPageViewWindow
+ * @Author lihao_song
  * @Date 2025/4/18 18:53
  * @description: 流量来源关键词页浏览窗口
  */
@@ -43,12 +43,12 @@ public class DwsTrafficSourceKeywordPageViewWindow {
                 " where page['last_page_id'] = 'search' and page['item_type'] ='keyword' and page['item'] is not null");
         tableEnv.createTemporaryView("search_table",searchTable);
 //        searchTable.execute().print();
-//
-//
+
+
         Table splitTable = tableEnv.sqlQuery("SELECT keyword,ts FROM search_table,\n" +
                 "LATERAL TABLE(ik_analyze(fullword)) t(keyword)");
         tableEnv.createTemporaryView("split_table",splitTable);
-        tableEnv.executeSql("select * from split_table").print();
+//        tableEnv.executeSql("select * from split_table").print();
 
         Table resTable = tableEnv.sqlQuery("SELECT \n" +
                 "  date_format(window_start, 'yyyy-MM-dd HH:mm:ss') stt,\n" +
@@ -60,7 +60,7 @@ public class DwsTrafficSourceKeywordPageViewWindow {
                 "  TUMBLE(TABLE split_table, DESCRIPTOR(ts), INTERVAL '5' second))\n" +
                 "  GROUP BY window_start, window_end, keyword");
 //        resTable.execute().print();
-//
+
         tableEnv.executeSql("create table dws_traffic_source_keyword_page_view_window(" +
                 "  stt string, " +  // 2023-07-11 14:14:14
                 "  edt string, " +
@@ -75,13 +75,12 @@ public class DwsTrafficSourceKeywordPageViewWindow {
                 "  'password' = 'root', " +
                 "  'sink.properties.format' = 'json', " +
                 "  'sink.buffer-count' = '4', " +
-                "  'sink.buffer-size' = '4086'," +
+                "  'sink.buffer-size' = '1000'," +
                 "  'sink.enable-2pc' = 'false', " + // 测试阶段可以关闭两阶段提交,方便测试
                 "  'sink.properties.read_json_by_line' = 'true' " +
                 ")");
-        resTable.executeInsert("dws_traffic_source_keyword_page_view_window");
-
-
-        env.execute("DwsTrafficSourceKeywordPageViewWindow");
+//
+        tableEnv.executeSql("INSERT INTO dws_traffic_source_keyword_page_view_window " +
+                "SELECT stt, edt, cur_date, keyword, keyword_count FROM " + resTable);
     }
 }

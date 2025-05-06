@@ -27,8 +27,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * @Package com.stream.realtime.app.dwd.DwdBaseLog
- * @Author song.lihao
+ * @Package com.slh.app.dwd.DwdBaseLog
+ * @Author lihao_song
  * @Date 2025/4/23 16:24
  * @description: 数据仓库明细层基础日志表
  */

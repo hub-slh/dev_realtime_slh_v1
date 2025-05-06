@@ -11,8 +11,8 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import java.time.Duration;
 
 /**
- * @Package com.stream.realtime.app.dwd.DwdTradeOrderDetail
- * @Author song.lihao
+ * @Package com.slh.app.dwd.DwdTradeOrderDetail
+ * @Author lihao_song
  * @Date 2025/4/23 16:50
  * @description:数据仓库明细层 订单详情表
  */

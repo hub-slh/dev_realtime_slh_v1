@@ -10,8 +10,8 @@ import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 /**
- * @Package com.stream.realtime.app.ods.Mysql_To_Kafka
- * @Author song.lihao
+ * @Package com.slh.app.ods.Mysql_To_Kafka
+ * @Author lihao_song
  * @Date 2025/4/23 15:30
  * @description:
  */

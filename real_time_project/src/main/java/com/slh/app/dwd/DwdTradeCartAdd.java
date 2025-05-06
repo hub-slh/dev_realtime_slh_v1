@@ -9,8 +9,8 @@ import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 
 /**
- * @Package com.stream.realtime.app.dwd.DwdTradeCartAdd
- * @Author song.lihao
+ * @Package com.slh.app.dwd.DwdTradeCartAdd
+ * @Author lihao_song
  * @Date 2025/4/23 16:46
  * @description:数据仓库明细层 购物车添加表
  */

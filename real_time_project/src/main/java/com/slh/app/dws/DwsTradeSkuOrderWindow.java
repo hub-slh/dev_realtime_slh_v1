@@ -20,10 +20,7 @@ import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.streaming.api.CheckpointingMode;
-import org.apache.flink.streaming.api.datastream.DataStreamSource;
-import org.apache.flink.streaming.api.datastream.KeyedStream;
-import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
-import org.apache.flink.streaming.api.datastream.WindowedStream;
+import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -36,7 +33,7 @@ import org.apache.hadoop.hbase.client.Connection;
 import java.math.BigDecimal;
 
 /**
- * @Package com.lzy.stream.realtime.v1.app.dws.DwsTradeSkuOrderWindow
+ * @Package com.slh.app.dws.DwsTradeSkuOrderWindow
  * @Author lihao_song
  * @Date 2025/4/18 13:52
  * @description: DwsTradeSkuOrderWindow 交易库存单位订单窗口
@@ -102,16 +99,16 @@ public class DwsTradeSkuOrderWindow {
 
                     @Override
                     public void onTimer(long timestamp, KeyedProcessFunction<String, JSONObject, JSONObject>.OnTimerContext ctx, Collector<JSONObject> out) throws Exception {
-                        //当定时器被触发执行的时候，将状态中的数据发送到下游，并清除状态
+//                        当定时器被触发执行的时候，将状态中的数据发送到下游，并清除状态
                         JSONObject jsonObj = lastJsonObjState.value();
                         out.collect(jsonObj);
                         lastJsonObjState.clear();
                     }
                 }
         );
-
-
-//        distinctDS.print();
+//
+//
+//        distinctDS.print("s->");
 
         SingleOutputStreamOperator<JSONObject> withWatermarkDS = distinctDS.assignTimestampsAndWatermarks(
                 WatermarkStrategy
@@ -126,17 +123,17 @@ public class DwsTradeSkuOrderWindow {
                         )
         );
 
-//        withWatermarkDS.print();
+//        withWatermarkDS.print("a->");
 //
         SingleOutputStreamOperator<TradeSkuOrderBean> beanDS = withWatermarkDS.map(
                 new MapFunction<JSONObject, TradeSkuOrderBean>() {
                     @Override
                     public TradeSkuOrderBean map(JSONObject jsonObj) {
-                        //{"create_time":"2024-06-11 10:54:40","sku_num":"1","activity_rule_id":"5","split_original_amount":"11999.0000",
-                        // "split_coupon_amount":"0.0","sku_id":"19","date_id":"2024-06-11","user_id":"2998","province_id":"32",
-                        // "activity_id":"4","sku_name":"TCL","id":"15183","order_id":"10788","split_activity_amount":"1199.9",
-                        // "split_total_amount":"10799.1","ts":1718160880}
-
+//                        {"create_time":"2024-06-11 10:54:40","sku_num":"1","activity_rule_id":"5","split_original_amount":"11999.0000",
+//                         "split_coupon_amount":"0.0","sku_id":"19","date_id":"2024-06-11","user_id":"2998","province_id":"32",
+//                         "activity_id":"4","sku_name":"TCL","id":"15183","order_id":"10788","split_activity_amount":"1199.9",
+//                         "split_total_amount":"10799.1","ts":1718160880}
+//
                         String skuId = jsonObj.getString("sku_id");
                         BigDecimal splitOriginalAmount = jsonObj.getBigDecimal("split_original_amount");
                         BigDecimal splitCouponAmount = jsonObj.getBigDecimal("split_coupon_amount");
@@ -155,19 +152,19 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-//        beanDS.print();
+//        beanDS.print("c->");
 //
 
-        //TODO 6.分组
+//        TODO 6.分组
         KeyedStream<TradeSkuOrderBean, String> skuIdKeyedDS = beanDS
                 .keyBy(TradeSkuOrderBean::getSkuId);
-
-        //TODO 7.开窗
+//
+//        TODO 7.开窗
         WindowedStream<TradeSkuOrderBean, String, TimeWindow> windowDS = skuIdKeyedDS
                 .window(TumblingProcessingTimeWindows
                         .of(org.apache.flink.streaming.api.windowing.time.Time.seconds(10)));
-
-        //TODO 8.聚合
+//
+//        TODO 8.聚合
         SingleOutputStreamOperator<TradeSkuOrderBean> reduceDS = windowDS.reduce(
                 new ReduceFunction<TradeSkuOrderBean>() {
                     @Override
@@ -194,7 +191,7 @@ public class DwsTradeSkuOrderWindow {
                     }
                 }
         );
-//        reduceDS.print();
+//        reduceDS.print("d->");
 
         SingleOutputStreamOperator<TradeSkuOrderBean> withSpuInfoDS = reduceDS.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
@@ -224,7 +221,7 @@ public class DwsTradeSkuOrderWindow {
                                 }
                             }
                         } catch (Exception e) {
-                            // 记录错误日志但继续处理
+//                             记录错误日志但继续处理
                             System.err.println("Error getting sku info for skuId: " + orderBean.getSkuId() + ", " + e.getMessage());
                         }
                         return orderBean;
@@ -232,7 +229,7 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-        // 修改后的withTmDS部分
+//         修改后的withTmDS部分
         SingleOutputStreamOperator<TradeSkuOrderBean> withTmDS = withSpuInfoDS.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
                     private Connection hbaseConn;
@@ -266,7 +263,7 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-        // 修改后的c3Stream部分
+//         修改后的c3Stream部分
         SingleOutputStreamOperator<TradeSkuOrderBean> c3Stream = withTmDS.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
                     private Connection hbaseConn;
@@ -301,7 +298,7 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-        // 修改后的c2Stream部分
+//         修改后的c2Stream部分
         SingleOutputStreamOperator<TradeSkuOrderBean> c2Stream = c3Stream.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
                     private Connection hbaseConn;
@@ -336,7 +333,7 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-        // 修改后的c1Stream部分
+//         修改后的c1Stream部分
         SingleOutputStreamOperator<TradeSkuOrderBean> c1Stream = c2Stream.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
                     private Connection hbaseConn;
@@ -371,11 +368,11 @@ public class DwsTradeSkuOrderWindow {
         );
 
         SingleOutputStreamOperator<String> jsonOrder = c1Stream.map(new BeanToJsonStrMapFunction<>());
-
-        jsonOrder.print();
-
-        jsonOrder.sinkTo(FlinkSinkUtil.getDorisSink("dws_trade_sku_order_window"));
 //
+        jsonOrder.print();
+////
+        jsonOrder.sinkTo(FlinkSinkUtil.getDorisSink("dws_trade_sku_order_window"));
+
         env.execute("DwsTradeSkuOrderWindow");
     }
 }

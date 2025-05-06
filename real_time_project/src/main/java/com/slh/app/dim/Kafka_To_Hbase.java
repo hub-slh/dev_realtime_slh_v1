@@ -27,8 +27,8 @@ import org.apache.flink.util.Collector;
 import org.apache.hadoop.hbase.client.Connection;
 
 /**
- * @Package com.stream.realtime.app.dim.Kafka_To_Hbase
- * @Author song.lihao
+ * @Package com.slh.app.dim.Kafka_To_Hbase
+ * @Author lihao_song
  * @Date 2025/4/23 16:19
  * @description:
  */

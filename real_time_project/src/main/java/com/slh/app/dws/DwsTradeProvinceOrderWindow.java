@@ -40,7 +40,7 @@ import java.util.Collections;
 import java.util.HashSet;
 
 /**
- * @Package com.lzy.stream.realtime.v1.app.dws.DwsTradeProvinceOrderWindow
+ * @Package com.slh.app.dws.DwsTradeProvinceOrderWindow
  * @Author lihao_song
  * @Date 2025/5/0 14:47
  * @description: DwsTradeProvinceOrderWindow 交易省份订单窗口
@@ -207,7 +207,7 @@ public class DwsTradeProvinceOrderWindow {
         ).setParallelism(1);
 
         SingleOutputStreamOperator<String> sink = withProvinceDS.map(new BeanToJsonStrMapFunction<>());
-        sink.print();
+//        sink.print();
 
         sink.sinkTo(FlinkSinkUtil.getDorisSink("dws_trade_province_order_window"));
 

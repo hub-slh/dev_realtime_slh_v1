@@ -31,7 +31,7 @@ import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 
 /**
- * @Package com.zzw.stream.realtime.v1.app.dws.DwsTradeCartAddUuWindow
+ * @Package com.slh.app.dws.DwsTradeCartAddUuWindow
  * @Author lihao_song
  * @Date 2025/5/3 14:46
  * @description: DwsTradeCartAddUuWindow 交易购物车添加Uu窗口
@@ -97,7 +97,7 @@ public class DwsTradeCartAddUuWindow {
         );
 
         AllWindowedStream<JSONObject, TimeWindow> windowDS = cartUUDS
-                .windowAll(TumblingEventTimeWindows.of(org.apache.flink.streaming.api.windowing.time.Time.seconds(2)));
+                .windowAll(TumblingEventTimeWindows.of(org.apache.flink.streaming.api.windowing.time.Time.seconds(1)));
 
         SingleOutputStreamOperator<CartAddUuBean> aggregateDS = windowDS.aggregate(
                 new AggregateFunction<JSONObject, Long, Long>() {
