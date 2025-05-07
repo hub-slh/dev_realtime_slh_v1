@@ -40,7 +40,7 @@ public class DwdTradeCartAdd {
                 ") " + SQLUtil.getHBaseDDL("dim_base_dic")
         );
 //        tableEnv.executeSql("select * from base_dic").print();
-
+        // 提取购物车信息并处理
         Table cartInfo = tableEnv.sqlQuery("select \n" +
                 "   `after`['id'] id,\n" +
                 "   `after`['user_id'] user_id,\n" +

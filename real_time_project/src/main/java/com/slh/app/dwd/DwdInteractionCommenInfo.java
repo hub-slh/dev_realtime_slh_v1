@@ -21,9 +21,9 @@ public class DwdInteractionCommenInfo {
         env.setParallelism(4);
 
         StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
-
+        // 精确一次语义
         env.enableCheckpointing(5000L, CheckpointingMode.EXACTLY_ONCE);
-
+        // 创建卡芙卡原表 映射topic_db主题
         tableEnv.executeSql("CREATE TABLE topic_db (\n" +
                 "  after MAP<string, string>, \n" +
                 "  source MAP<string, string>, \n" +
@@ -31,7 +31,7 @@ public class DwdInteractionCommenInfo {
                 "  `ts_ms` bigint " +
                 ")" + SQLUtil.getKafkaDDL(Constant.TOPIC_DB, Constant.TOPIC_DWD_INTERACTION_COMMENT_INFO));
 //        tableEnv.executeSql("select * from topic_db").print();
-
+        // 从topic_db中筛选comment_info表的读取操作数据
         Table commentInfo = tableEnv.sqlQuery("select  \n" +
                 "    `after`['id'] as id, \n" +
                 "    `after`['user_id'] as user_id, \n" +
@@ -42,17 +42,16 @@ public class DwdInteractionCommenInfo {
                 "     ts_ms " +
                 "     from topic_db where source['table'] = 'comment_info' and op = 'r'");
 //        commentInfo.execute().print();
-//
+        // 创建临时视图
         tableEnv.createTemporaryView("comment_info",commentInfo);
-
-
+        // 创建Hbase维度表连接
         tableEnv.executeSql("CREATE TABLE base_dic (\n" +
                 " dic_code string,\n" +
                 " info ROW<dic_name string>,\n" +
                 " PRIMARY KEY (dic_code) NOT ENFORCED\n" +
                 ") " + SQLUtil.getHBaseDDL("dim_base_dic"));
 //        tableEnv.executeSql("select * from base_dic").print();
-
+        // 关联评论表和字典表
         Table joinedTable = tableEnv.sqlQuery("SELECT  \n" +
                 "    id,\n" +
                 "    user_id,\n" +

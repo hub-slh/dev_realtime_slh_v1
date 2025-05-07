@@ -45,6 +45,7 @@ public class DwdTradeOrderRefund {
 //        tableEnv.executeSql("select * from base_dic").print();
 
         // 2. 过滤退单表数据 order_refund_info   insert
+        // 退单信息表
         Table orderRefundInfo = tableEnv.sqlQuery(
                 "select " +
                         " after['id'] id," +
@@ -78,6 +79,7 @@ public class DwdTradeOrderRefund {
 //        orderInfo.execute().print();
 
         // 4. join: 普通的和 lookup join
+        // 关联退款信息和订单信息
         Table result = tableEnv.sqlQuery(
                 "select " +
                         "  ri.id," +

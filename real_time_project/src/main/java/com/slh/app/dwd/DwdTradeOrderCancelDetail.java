@@ -44,7 +44,7 @@ public class DwdTradeOrderCancelDetail {
                 ") " + SQLUtil.getHBaseDDL("dim_base_dic")
         );
 //        tableEnv.executeSql("select * from base_dic").print();
-
+        // 提取订单取消信息
         Table orderCancel = tableEnv.sqlQuery("select " +
                 " `after`['id'] as id, " +
                 " `after`['operate_time'] as operate_time, " +
@@ -59,6 +59,7 @@ public class DwdTradeOrderCancelDetail {
 
 
         //TODO 从下单事实表中获取下单数据
+        // 创建订单详情表并关联
         tableEnv.executeSql(
                 "create table dwd_trade_order_detail(" +
                         "  id string," +
@@ -81,6 +82,7 @@ public class DwdTradeOrderCancelDetail {
                         "  )" + SQLUtil.getKafkaDDL(Constant.TOPIC_DWD_TRADE_ORDER_DETAIL,Constant.TOPIC_DWD_TRADE_ORDER_CANCEL));
 
         //TODO 将下单事实表和取消订单表进行关联
+        // 关联订单详情和取消订单表
         Table result = tableEnv.sqlQuery(
                 "select  " +
                         "  od.id," +

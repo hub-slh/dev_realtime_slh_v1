@@ -46,6 +46,7 @@ public class DwdTradeOrderDetail {
 //        tableEnv.executeSql("select * from base_dic").print();
 
 //TODO 过滤出订单明细数据
+        // 订单明细数据
         Table orderDetail = tableEnv.sqlQuery(
                 "select " +
                         "  after['id'] as id," +
@@ -69,6 +70,7 @@ public class DwdTradeOrderDetail {
 //        orderDetail.execute().print();
 
         //TODO 过滤出订单数据
+        // 订单数据
         Table orderInfo = tableEnv.sqlQuery(
                 "select " +
                         "  after['id'] as id," +
@@ -81,6 +83,7 @@ public class DwdTradeOrderDetail {
 //        orderInfo.execute().print();
 
         //TODO 过滤出明细活动数据
+        // 订单明细活动数据
         Table orderDetailActivity = tableEnv.sqlQuery(
                 "select " +
                         "  after['order_detail_id'] order_detail_id, " +
@@ -93,6 +96,7 @@ public class DwdTradeOrderDetail {
 //        orderDetailActivity.execute().print();
 
         //TODO 过滤出明细优惠券数据
+        // 订单明细优惠券数据
         Table orderDetailCoupon = tableEnv.sqlQuery(
                 "select " +
                         "  after['order_detail_id'] order_detail_id, " +

@@ -40,14 +40,16 @@ public class DwdBaseLog {
     private static final String PAGE = "page";
 
     public static void main(String[] args) throws Exception{
+        // 创建流处理环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(4);
         env.enableCheckpointing(5000L, CheckpointingMode.EXACTLY_ONCE);
+        // 从 kafka 获取数据源
         KafkaSource<String> kafkaSource = FlinkSourceUtil.getKafkaSource(Constant.TOPIC_LOG, "dwd_log");
         DataStreamSource<String> kafkaStrDS = env.fromSource(kafkaSource, WatermarkStrategy.noWatermarks(), "Kafka_Source");
-
+        // 定义脏数据输出标签
         OutputTag<String> dirtyTag = new OutputTag<String>("dirtyTag"){};
-
+        // 将JAON字符串转换为JSONObject并过滤脏数据
         SingleOutputStreamOperator<JSONObject> jsonObDS = kafkaStrDS.process(
                 new ProcessFunction<String, JSONObject>() {
                     @Override
@@ -61,13 +63,13 @@ public class DwdBaseLog {
                     }
                 }
         );
-
+        // 获取脏数据流并输出到kafka
         SideOutputDataStream<String> dirtyDS = jsonObDS.getSideOutput(dirtyTag);
 
         dirtyDS.sinkTo(FlinkSinkUtil.getKafkaSink("dirty_data"));
-
+        // 按设备id分组
         KeyedStream<JSONObject, String> keyedDS = jsonObDS.keyBy(jsonObj -> jsonObj.getJSONObject("common").getString("mid"));
-
+        // 使用SingleOutputStreamOperator处理is_new字段标签
         SingleOutputStreamOperator<JSONObject> fixedDS = keyedDS.map(
                 new RichMapFunction<JSONObject, JSONObject>() {
                     private ValueState<String> lastVisitDateState;
@@ -85,6 +87,7 @@ public class DwdBaseLog {
 
                     @Override
                     public JSONObject map(JSONObject jsonObj) throws Exception {
+                        // 处理is_new字段逻辑
                         String isNew = jsonObj.getJSONObject("common").getString("is_new");
                         String lastVisitDate = lastVisitDateState.value();
                         Long ts = jsonObj.getLong("ts");
@@ -110,12 +113,12 @@ public class DwdBaseLog {
                     }
                 }
         );
-
+        // 定义各种日志类型的输出标签
         OutputTag<String> errTag = new OutputTag<String>("errTag") {};
         OutputTag<String> startTag = new OutputTag<String>("startTag") {};
         OutputTag<String> displayTag = new OutputTag<String>("displayTag") {};
         OutputTag<String> actionTag = new OutputTag<String>("actionTag") {};
-        //分流
+        // 分流处理
         SingleOutputStreamOperator<String> pageDS = fixedDS.process(
                 new ProcessFunction<JSONObject, String>() {
                     @Override
@@ -169,24 +172,25 @@ public class DwdBaseLog {
                     }
                 }
         );
-
+        // 获取各种类型的侧输出流
         SideOutputDataStream<String> errDS = pageDS.getSideOutput(errTag);
         SideOutputDataStream<String> startDS = pageDS.getSideOutput(startTag);
         SideOutputDataStream<String> displayDS = pageDS.getSideOutput(displayTag);
         SideOutputDataStream<String> actionDS = pageDS.getSideOutput(actionTag);
+        // 打印各种日志流
         pageDS.print("页面:");
         errDS.print("错误:");
         startDS.print("启动:");
         displayDS.print("曝光:");
         actionDS.print("动作:");
-
+        // 将各种放入Map中方便管理
         Map<String, DataStream<String>> streamMap = new HashMap<>();
         streamMap.put(ERR,errDS);
         streamMap.put(START,startDS);
         streamMap.put(DISPLAY,displayDS);
         streamMap.put(ACTION,actionDS);
         streamMap.put(PAGE,pageDS);
-
+        // 将各流输出到对应的kafka主题
         streamMap
                 .get(PAGE)
                 .sinkTo(FlinkSinkUtil.getKafkaSink(Constant.TOPIC_DWD_TRAFFIC_PAGE));

@@ -30,22 +30,39 @@ import org.apache.hadoop.hbase.client.Connection;
  * @Package com.slh.app.dim.Kafka_To_Hbase
  * @Author lihao_song
  * @Date 2025/4/23 16:19
- * @description:
+ * @description: Kafka 到 Hbase 的维度数据处理程序
+ *
+ * 主要功能：
+ *  * 1. 从Kafka的topic_db主题消费数据
+ *  * 2. 过滤出dev_realtime_v1数据库的变更数据(c/u/d/r操作)
+ *  * 3. 从MySQL配置表(table_process_dim)获取维度表处理规则
+ *  * 4. 根据配置动态创建/删除HBase表
+ *  * 5. 将处理后的维度数据写入HBase
+ *  *
+ *  * 核心流程：
+ *  * 1. Kafka数据源 -> 数据过滤 -> 配置表数据 -> 广播连接 -> 维度数据处理 -> HBase写入
+ *  * 2. 使用Exactly-Once检查点机制保证数据一致性
+ *  *
+ *  * 注意事项：
+ *  * 1. 并行度设置为4，配置表处理使用单并行度
+ *  * 2. 检查点间隔5000ms
+ *  * 3. 使用广播状态共享维度表配置信息
+ *  * 4. HBase表操作包括创建、删除和重建
  */
 public class Kafka_To_Hbase {
     public static void main(String[] args) throws Exception {
+        // 初始化流处理环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
+        // 设置检查点并行度为4
         env.setParallelism(4);
-
+        // 启动家差点 5000ms间隔 EXACTLY_ONCE语义
         env.enableCheckpointing(5000L , CheckpointingMode.EXACTLY_ONCE);
-
+        // 从 Kafka 消费数据，消费组为dim_app
         KafkaSource<String> kafkaSource = FlinkSourceUtil.getKafkaSource(Constant.TOPIC_DB, "dim_app");
-
         DataStreamSource<String> kafkaStrDS = env.fromSource(kafkaSource, WatermarkStrategy.noWatermarks(), "kafka_source");
 
         //kafkaStrDS.print();
-
+        // 数据过滤：只处理dev_realtime_v1 数据库的变更数据(c 创建 u 修改 d 删除 r 读取 )
         SingleOutputStreamOperator<JSONObject> jsonObjDS = kafkaStrDS.process(
                 new ProcessFunction<String, JSONObject>() {
                     @Override
@@ -71,7 +88,7 @@ public class Kafka_To_Hbase {
         );
 
 //        jsonObjDS.print();
-
+        // 从 Mysql 配置表中获取维度表处理规则
         MySqlSource<String> mySqlSource = FlinkSourceUtil.getMySqlSource("dev_realtime_v1_config", "table_process_dim");
 
         DataStreamSource<String> mysqlStrDS = env
@@ -79,7 +96,7 @@ public class Kafka_To_Hbase {
                 .setParallelism(1);
 
 //        mysqlStrDS.print();
-
+        // 解析配置表数据为 TableProcessDim 对象
         SingleOutputStreamOperator<TableProcessDim> tpDS = mysqlStrDS.map(
                 new MapFunction<String, TableProcessDim>() {
                     @Override
@@ -87,9 +104,9 @@ public class Kafka_To_Hbase {
                         JSONObject jsonObj = JSON.parseObject(jsonStr);
                         String op = jsonObj.getString("op");
                         TableProcessDim tableProcessDim = null;
-                        if("d".equals(op)){
+                        if("d".equals(op)){ // 删除操作取before数据
                             tableProcessDim = jsonObj.getObject("before", TableProcessDim.class);
-                        }else{
+                        }else{ // 其他操作取after数据
                             tableProcessDim = jsonObj.getObject("after", TableProcessDim.class);
                         }
                         tableProcessDim.setOp(op);
@@ -99,7 +116,7 @@ public class Kafka_To_Hbase {
         ).setParallelism(1);
 
 //        tpDS.print();
-
+        // 根据配置动态管理Hbase表(创建/删除/重建)
         tpDS.map(
                 new RichMapFunction<TableProcessDim, TableProcessDim>() {
 
@@ -120,11 +137,11 @@ public class Kafka_To_Hbase {
                         String op = tp.getOp();
                         String sinkTable = tp.getSinkTable();
                         String[] sinkFamilies = tp.getSinkFamily().split(",");
-                        if("d".equals(op)){
+                        if("d".equals(op)){//删除
                             HBaseUtil.dropHBaseTable(hbaseConn, Constant.HBASE_NAMESPACE,sinkTable);
-                        }else if("r".equals(op)||"c".equals(op)){
+                        }else if("r".equals(op)||"c".equals(op)){//读取或创建操作
                             HBaseUtil.createHBaseTable(hbaseConn,Constant.HBASE_NAMESPACE,sinkTable,sinkFamilies);
-                        }else{
+                        }else{//更新操作
                             HBaseUtil.dropHBaseTable(hbaseConn,Constant.HBASE_NAMESPACE,sinkTable);
                             HBaseUtil.createHBaseTable(hbaseConn,Constant.HBASE_NAMESPACE,sinkTable,sinkFamilies);
                         }
@@ -134,18 +151,18 @@ public class Kafka_To_Hbase {
         ).setParallelism(1);
 
 //         tpDS.print();
-
+        // 创建广播状态描述符，用于共享维度表配置
         MapStateDescriptor<String, TableProcessDim> mapStateDescriptor =
                 new MapStateDescriptor<String, TableProcessDim>("mapStateDescriptor",String.class, TableProcessDim.class);
         BroadcastStream<TableProcessDim> broadcastDS = tpDS.broadcast(mapStateDescriptor);
-
+        // 连接主数据流和广播流
         BroadcastConnectedStream<JSONObject, TableProcessDim> connectDS = jsonObjDS.connect(broadcastDS);
-
+        // 处理连接后的；流，应用维度配置表
         SingleOutputStreamOperator<Tuple2<JSONObject,TableProcessDim>> dimDS = connectDS
                 .process(new TableProcessFunction(mapStateDescriptor));
 
 //        dimDS.print();
-
+        // 将处理后的数据写入Hbase
         dimDS.addSink(new HBaseSinkFunction());
 
         env.execute("dim");

@@ -46,6 +46,7 @@ public class DwdTradeOrderPaySucDetail {
 //        tableEnv.executeSql("select * from base_dic").print();
 
         //TODO 从下单事实表读取数据 创建动态表
+        // 订单明细实时表
         tableEnv.executeSql(
                 "create table dwd_trade_order_detail(" +
                         " id string," +
@@ -84,6 +85,7 @@ public class DwdTradeOrderPaySucDetail {
 //        paymentInfo.execute().print();
 
         //TODO 和字典进行关联---lookup join 和下单数据进行关联---IntervalJoin
+        // 关联订单明细和支付信息
         Table result = tableEnv.sqlQuery(
                 "select " +
                         "od.id order_detail_id," +

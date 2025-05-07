@@ -10,6 +10,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>real_time_project</module>
+        <module>sensitive_words</module>
     </modules>
 
     <properties>
