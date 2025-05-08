@@ -36,24 +36,30 @@ import java.math.BigDecimal;
  * @Package com.slh.app.dws.DwsTradeSkuOrderWindow
  * @Author lihao_song
  * @Date 2025/4/18 13:52
- * @description: DwsTradeSkuOrderWindow 交易库存单位订单窗口
+ * @description: 交易域SKU粒度订单统计窗口
+ * 该程序用于统计各SKU的订单金额、优惠金额等信息，并补充商品分类和品牌信息，最终将结果写入Doris数据库。
  */
-
 public class DwsTradeSkuOrderWindow {
     public static void main(String[] args) throws Exception {
+        // 创建流处理执行环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
+        // 设置并行度为1
         env.setParallelism(1);
 
+        // 启用检查点，每5000毫秒做一次检查点，保证Exactly-Once语义
         env.enableCheckpointing(5000L, CheckpointingMode.EXACTLY_ONCE);
 
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3,3000L));
+        // 设置重启策略，固定延迟重启3次，每次间隔3000毫秒
+        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, 3000L));
 
+        // 从Kafka获取数据源，主题为dwd_trade_order_detail，消费者组为dws_trade_sku_order_window
         KafkaSource<String> kafkaSource = FlinkSourceUtil.getKafkaSource("dwd_trade_order_detail", "dws_trade_sku_order_window");
 
-        DataStreamSource<String> kafkaStrDS =
-                env.fromSource(kafkaSource, WatermarkStrategy.noWatermarks(), "Kafka_Source");
+        // 创建Kafka数据流
+        DataStreamSource<String> kafkaStrDS = env.fromSource(kafkaSource, WatermarkStrategy.noWatermarks(), "Kafka_Source");
 
+        // 将JSON字符串转换为JSONObject，过滤空值
         SingleOutputStreamOperator<JSONObject> jsonObjDS = kafkaStrDS.process(
                 new ProcessFunction<String, JSONObject>() {
                     @Override
@@ -66,16 +72,17 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-//        jsonObjDS.print();
-//
+        // 按照订单明细ID分组，用于去重
         KeyedStream<JSONObject, String> orderDetailIdKeyedDS = jsonObjDS.keyBy(jsonObj -> jsonObj.getString("id"));
 
+        // 去重处理：对于同一订单明细ID，只保留最新的一条记录
         SingleOutputStreamOperator<JSONObject> distinctDS = orderDetailIdKeyedDS.process(
                 new KeyedProcessFunction<String, JSONObject, JSONObject>() {
-                    private ValueState<JSONObject> lastJsonObjState;
+                    private ValueState<JSONObject> lastJsonObjState;  // 状态变量，记录上次处理的JSON对象
 
                     @Override
                     public void open(Configuration parameters) {
+                        // 初始化状态变量
                         ValueStateDescriptor<JSONObject> valueStateDescriptor
                                 = new ValueStateDescriptor<>("lastJsonObjState", JSONObject.class);
                         lastJsonObjState = getRuntimeContext().getState(valueStateDescriptor);
@@ -85,10 +92,12 @@ public class DwsTradeSkuOrderWindow {
                     public void processElement(JSONObject jsonObj, KeyedProcessFunction<String, JSONObject, JSONObject>.Context ctx, Collector<JSONObject> out) throws Exception {
                         JSONObject lastJsonObj = lastJsonObjState.value();
                         if (lastJsonObj == null) {
+                            // 如果是第一条记录，保存状态并注册5秒后的定时器
                             lastJsonObjState.update(jsonObj);
                             long currentProcessingTime = ctx.timerService().currentProcessingTime();
                             ctx.timerService().registerProcessingTimeTimer(currentProcessingTime + 5000L);
                         } else {
+                            // 比较时间戳，保留最新的记录
                             String lastTs = lastJsonObj.getString("ts_ms");
                             String curTs = jsonObj.getString("ts_ms");
                             if (curTs.compareTo(lastTs) >= 0) {
@@ -99,41 +108,37 @@ public class DwsTradeSkuOrderWindow {
 
                     @Override
                     public void onTimer(long timestamp, KeyedProcessFunction<String, JSONObject, JSONObject>.OnTimerContext ctx, Collector<JSONObject> out) throws Exception {
-//                        当定时器被触发执行的时候，将状态中的数据发送到下游，并清除状态
+                        // 定时器触发时，输出状态中的数据并清除状态
                         JSONObject jsonObj = lastJsonObjState.value();
-                        out.collect(jsonObj);
-                        lastJsonObjState.clear();
+                        if (jsonObj != null) {
+                            out.collect(jsonObj);
+                            lastJsonObjState.clear();
+                        }
                     }
                 }
         );
-//
-//
-//        distinctDS.print("s->");
 
+        // 分配时间戳和水位线，用于处理时间窗口
         SingleOutputStreamOperator<JSONObject> withWatermarkDS = distinctDS.assignTimestampsAndWatermarks(
                 WatermarkStrategy
-                        .<JSONObject>forMonotonousTimestamps()
+                        .<JSONObject>forMonotonousTimestamps()  // 单调递增的水位线策略
                         .withTimestampAssigner(
                                 new SerializableTimestampAssigner<JSONObject>() {
                                     @Override
                                     public long extractTimestamp(JSONObject jsonObj, long recordTimestamp) {
+                                        // 从JSON对象中提取时间戳（单位为毫秒）
                                         return jsonObj.getLong("ts_ms") * 1000;
                                     }
                                 }
                         )
         );
 
-//        withWatermarkDS.print("a->");
-//
+        // 将JSON对象转换为TradeSkuOrderBean对象
         SingleOutputStreamOperator<TradeSkuOrderBean> beanDS = withWatermarkDS.map(
                 new MapFunction<JSONObject, TradeSkuOrderBean>() {
                     @Override
                     public TradeSkuOrderBean map(JSONObject jsonObj) {
-//                        {"create_time":"2024-06-11 10:54:40","sku_num":"1","activity_rule_id":"5","split_original_amount":"11999.0000",
-//                         "split_coupon_amount":"0.0","sku_id":"19","date_id":"2024-06-11","user_id":"2998","province_id":"32",
-//                         "activity_id":"4","sku_name":"TCL","id":"15183","order_id":"10788","split_activity_amount":"1199.9",
-//                         "split_total_amount":"10799.1","ts":1718160880}
-//
+                        // 提取SKU相关金额信息
                         String skuId = jsonObj.getString("sku_id");
                         BigDecimal splitOriginalAmount = jsonObj.getBigDecimal("split_original_amount");
                         BigDecimal splitCouponAmount = jsonObj.getBigDecimal("split_coupon_amount");
@@ -152,23 +157,19 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-//        beanDS.print("c->");
-//
+        // 按照SKU ID分组
+        KeyedStream<TradeSkuOrderBean, String> skuIdKeyedDS = beanDS.keyBy(TradeSkuOrderBean::getSkuId);
 
-//        TODO 6.分组
-        KeyedStream<TradeSkuOrderBean, String> skuIdKeyedDS = beanDS
-                .keyBy(TradeSkuOrderBean::getSkuId);
-//
-//        TODO 7.开窗
+        // 定义10秒的处理时间滚动窗口
         WindowedStream<TradeSkuOrderBean, String, TimeWindow> windowDS = skuIdKeyedDS
-                .window(TumblingProcessingTimeWindows
-                        .of(org.apache.flink.streaming.api.windowing.time.Time.seconds(10)));
-//
-//        TODO 8.聚合
+                .window(TumblingProcessingTimeWindows.of(org.apache.flink.streaming.api.windowing.time.Time.seconds(10)));
+
+        // 窗口聚合：计算每个SKU的订单金额和优惠金额
         SingleOutputStreamOperator<TradeSkuOrderBean> reduceDS = windowDS.reduce(
                 new ReduceFunction<TradeSkuOrderBean>() {
                     @Override
                     public TradeSkuOrderBean reduce(TradeSkuOrderBean value1, TradeSkuOrderBean value2) {
+                        // 累加各项金额
                         value1.setOriginalAmount(value1.getOriginalAmount().add(value2.getOriginalAmount()));
                         value1.setActivityReduceAmount(value1.getActivityReduceAmount().add(value2.getActivityReduceAmount()));
                         value1.setCouponReduceAmount(value1.getCouponReduceAmount().add(value2.getCouponReduceAmount()));
@@ -178,7 +179,9 @@ public class DwsTradeSkuOrderWindow {
                 },
                 new ProcessWindowFunction<TradeSkuOrderBean, TradeSkuOrderBean, String, TimeWindow>() {
                     @Override
-                    public void process(String s, ProcessWindowFunction<TradeSkuOrderBean, TradeSkuOrderBean, String, TimeWindow>.Context context, Iterable<TradeSkuOrderBean> elements, Collector<TradeSkuOrderBean> out) {
+                    public void process(String s, ProcessWindowFunction<TradeSkuOrderBean, TradeSkuOrderBean, String, TimeWindow>.Context context,
+                                        Iterable<TradeSkuOrderBean> elements, Collector<TradeSkuOrderBean> out) {
+                        // 处理窗口结果，添加时间信息
                         TradeSkuOrderBean orderBean = elements.iterator().next();
                         TimeWindow window = context.window();
                         String stt = DateFormatUtil.tsToDateTime(window.getStart());
@@ -191,11 +194,11 @@ public class DwsTradeSkuOrderWindow {
                     }
                 }
         );
-//        reduceDS.print("d->");
 
+        // 补充SPU信息（从HBase中查询）
         SingleOutputStreamOperator<TradeSkuOrderBean> withSpuInfoDS = reduceDS.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
-                    private Connection hbaseConn;
+                    private Connection hbaseConn;  // HBase连接
 
                     @Override
                     public void open(Configuration parameters) throws Exception {
@@ -210,7 +213,8 @@ public class DwsTradeSkuOrderWindow {
                     @Override
                     public TradeSkuOrderBean map(TradeSkuOrderBean orderBean) throws Exception {
                         try {
-                            if (orderBean.getSkuId() != null) {  // 使用skuId而不是spuId
+                            if (orderBean.getSkuId() != null) {
+                                // 从HBase中查询SKU信息
                                 JSONObject skuInfoJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
                                         "dim_sku_info", orderBean.getSkuId(), JSONObject.class);
                                 if (skuInfoJsonObj != null) {
@@ -221,7 +225,6 @@ public class DwsTradeSkuOrderWindow {
                                 }
                             }
                         } catch (Exception e) {
-//                             记录错误日志但继续处理
                             System.err.println("Error getting sku info for skuId: " + orderBean.getSkuId() + ", " + e.getMessage());
                         }
                         return orderBean;
@@ -229,7 +232,7 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-//         修改后的withTmDS部分
+        // 补充品牌信息
         SingleOutputStreamOperator<TradeSkuOrderBean> withTmDS = withSpuInfoDS.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
                     private Connection hbaseConn;
@@ -249,6 +252,7 @@ public class DwsTradeSkuOrderWindow {
                         try {
                             String tmId = orderBean.getTrademarkId();
                             if (tmId != null) {
+                                // 从HBase中查询品牌信息
                                 JSONObject tmJsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
                                         "dim_base_trademark", tmId, JSONObject.class);
                                 if (tmJsonObj != null) {
@@ -263,7 +267,7 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-//         修改后的c3Stream部分
+        // 补充三级分类信息
         SingleOutputStreamOperator<TradeSkuOrderBean> c3Stream = withTmDS.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
                     private Connection hbaseConn;
@@ -283,6 +287,7 @@ public class DwsTradeSkuOrderWindow {
                         try {
                             String category3Id = orderBean.getCategory3Id();
                             if (category3Id != null) {
+                                // 从HBase中查询三级分类信息
                                 JSONObject c3JsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
                                         "dim_base_category3", category3Id, JSONObject.class);
                                 if (c3JsonObj != null) {
@@ -298,7 +303,7 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-//         修改后的c2Stream部分
+        // 补充二级分类信息
         SingleOutputStreamOperator<TradeSkuOrderBean> c2Stream = c3Stream.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
                     private Connection hbaseConn;
@@ -318,6 +323,7 @@ public class DwsTradeSkuOrderWindow {
                         try {
                             String category2Id = orderBean.getCategory2Id();
                             if (category2Id != null) {
+                                // 从HBase中查询二级分类信息
                                 JSONObject c2JsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
                                         "dim_base_category2", category2Id, JSONObject.class);
                                 if (c2JsonObj != null) {
@@ -333,7 +339,7 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
-//         修改后的c1Stream部分
+        // 补充一级分类信息
         SingleOutputStreamOperator<TradeSkuOrderBean> c1Stream = c2Stream.map(
                 new RichMapFunction<TradeSkuOrderBean, TradeSkuOrderBean>() {
                     private Connection hbaseConn;
@@ -353,6 +359,7 @@ public class DwsTradeSkuOrderWindow {
                         try {
                             String category1Id = orderBean.getCategory1Id();
                             if (category1Id != null) {
+                                // 从HBase中查询一级分类信息
                                 JSONObject c1JsonObj = HBaseUtil.getRow(hbaseConn, Constant.HBASE_NAMESPACE,
                                         "dim_base_category1", category1Id, JSONObject.class);
                                 if (c1JsonObj != null) {
@@ -367,12 +374,16 @@ public class DwsTradeSkuOrderWindow {
                 }
         );
 
+        // 将结果对象转换为JSON字符串
         SingleOutputStreamOperator<String> jsonOrder = c1Stream.map(new BeanToJsonStrMapFunction<>());
-//
+
+        // 打印结果（调试用）
         jsonOrder.print();
-////
+
+        // 将结果写入Doris数据库
         jsonOrder.sinkTo(FlinkSinkUtil.getDorisSink("dws_trade_sku_order_window"));
 
+        // 执行任务
         env.execute("DwsTradeSkuOrderWindow");
     }
 }

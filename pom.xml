@@ -10,7 +10,6 @@
     <packaging>pom</packaging>
     <modules>
         <module>real_time_project</module>
-        <module>sensitive_words</module>
     </modules>
 
     <properties>
@@ -169,6 +168,12 @@
                 <groupId>commons-beanutils</groupId>
                 <artifactId>commons-beanutils</artifactId>
                 <version>1.9.4</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-streaming-java_2.11</artifactId>
+                <version>1.13.0</version> <!-- 使用您需要的版本 -->
+                <scope>provided</scope> <!-- 如果是集群运行，使用provided -->
             </dependency>
             <dependency>
                 <groupId>com.janeluo</groupId>

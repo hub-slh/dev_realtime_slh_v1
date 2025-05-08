@@ -5,6 +5,7 @@ package com.slh.app.dws;
 import com.slh.constant.Constant;
 import com.slh.function.KeywordUDTF;
 import com.slh.utils.SQLUtil;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
@@ -23,6 +24,10 @@ public class DwsTrafficSourceKeywordPageViewWindow {
         env.setParallelism(1);
 
         StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
+
+        Configuration configuration = tableEnv.getConfig().getConfiguration();
+
+        configuration.setString("table.local-time-zone","Asia/Shanghai");
 
         env.enableCheckpointing(5000L);
 
