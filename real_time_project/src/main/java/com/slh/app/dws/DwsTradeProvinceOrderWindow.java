@@ -86,7 +86,6 @@ public class DwsTradeProvinceOrderWindow {
         SingleOutputStreamOperator<JSONObject> distinctDS = orderDetailIdKeyedDS.process(
                 new KeyedProcessFunction<String, JSONObject, JSONObject>() {
                     private ValueState<JSONObject> lastJsonObjState;  // 状态变量，记录上次处理的JSON对象
-
                     @Override
                     public void open(Configuration parameters) {
                         // 初始化状态变量，设置TTL为10秒
