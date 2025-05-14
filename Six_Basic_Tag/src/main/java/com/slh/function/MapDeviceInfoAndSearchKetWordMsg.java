@@ -38,4 +38,4 @@ public JSONObject map(JSONObject jsonObject) throws Exception {
 
         return result;
         }
-        }
+}
