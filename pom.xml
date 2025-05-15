@@ -177,6 +177,11 @@
                 <scope>provided</scope> <!-- 如果是集群运行，使用provided -->
             </dependency>
             <dependency>
+                <groupId>com.opencsv</groupId>
+                <artifactId>opencsv</artifactId>
+                <version>5.6.1</version>
+            </dependency>
+            <dependency>
                 <groupId>com.janeluo</groupId>
                 <artifactId>ikanalyzer</artifactId>
                 <version>2012_u6</version>

@@ -14,13 +14,11 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-
 /**
  * 实时用户标签处理应用，主要功能：
  * 1. 从Kafka消费用户数据和行为日志
@@ -32,27 +30,38 @@ import java.util.*;
  * @date 2025/5/13
  */
 public class Tag_realtime {
-    // Kafka配置
-    private static final String kafka_botstrap_servers = "cdh01:9092"; // Kafka服务器地址
-    private static final String kafka_cdc_db_topic = "topic_db_v1";    // 数据库变更数据主题
-    private static final String kafka_user_info_topic = "topic_log";   // 用户行为日志主题
-
+    // Kafka服务器地址
+    private static final String kafka_botstrap_servers = "cdh01:9092";
+    // 数据库变更数据主题
+    private static final String kafka_cdc_db_topic = "topic_db_v1";
+    // 用户行为日志主题
+    private static final String kafka_user_info_topic = "topic_log";
+    private static final String kafka_label_base2_topic = "kafka_result_label_base2";
+    private static final String kafka_label_base4_topic = "kafka_result_label_base4";
+    private static final String kafka_label_base6_topic = "kafka_result_label_base6";
     // 从数据库加载的商品分类信息（静态变量，类加载时初始化）
     private static final List<DimBaseCategory> dim_base_categories;
-
     // 数据库连接对象
     private static Connection connection;
-
-    // 评分模型权重系数
-    private static final double device_rate_weight_coefficient = 0.1;  // 设备评分权重
-    private static final double search_rate_weight_coefficient = 0.15; // 搜索评分权重
-
+    // 设备评分权重
+    public class LabelConfig {
+        private static final double device_rate_weight_coefficient = 0.1;
+        // 搜索评分权重
+        private static final double search_rate_weight_coefficient = 0.15;
+        // 时间权重系数
+        private static final double time_rate_weight_coefficient = 0.1;
+        // 价格权重系数
+        private static final double amount_rate_weight_coefficient = 0.15;
+        // 品牌权重系数
+        private static final double brand_rate_weight_coefficient = 0.2;
+        // 类目权重系数
+        private static final double category_rate_weight_coefficient = 0.3;
+    }
     // 静态初始化块 - 在类加载时执行，从数据库加载商品分类数据
     static {
         try {
             // 建立数据库连接
             connection = DriverManager.getConnection("jdbc:mysql://cdh03:3306/dev_realtime_v1", "root", "root");
-
             // SQL查询：获取三级商品分类及其对应的二级和一级分类名称
             String sql = "select b3.id,                          \n" +
                     "            b3.name as b3name,              \n" +
@@ -63,10 +72,10 @@ public class Tag_realtime {
                     "     on b3.category2_id = b2.id             \n" +
                     "     join dev_realtime_v1.base_category1 as b1  \n" +
                     "     on b2.category1_id = b1.id";
-
             // 使用JDBC工具类执行查询并映射为DimBaseCategory对象列表
             dim_base_categories = JdbcUtils.queryList2(connection, sql, DimBaseCategory.class, false);
         } catch (Exception e) {
+            // 若初始化分类数据失败，抛出运行时异常
             throw new RuntimeException("初始化分类数据失败", e);
         } finally {
             // 关闭数据库连接
@@ -74,33 +83,30 @@ public class Tag_realtime {
                 try {
                     connection.close();
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    System.err.println("关闭数据库连接失败：" + e.getMessage());
                 }
             }
         }
     }
-
-    // 获取分类数据的公共方法
-    public static List<DimBaseCategory> getDimBaseCategories() {
-        return dim_base_categories;
-    }
-
-
     @SneakyThrows
     public static void main(String[] args) {
         // 设置Hadoop用户名（用于可能需要的HDFS操作）
         System.setProperty("HADOOP_USER_NAME", "root");
-
         // 创建Flink流处理执行环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        // 设置并行度为4
         env.setParallelism(4);
+
         // 1. 从Kafka消费CDC数据库变更数据
         SingleOutputStreamOperator<String> kafkaCdcDbSource = env.fromSource(
-                KafkaUtils.buildKafkaSecureSource(  // 构建安全的Kafka消费者
+                // 构建安全的Kafka消费者
+                KafkaUtils.buildKafkaSecureSource(
                         kafka_botstrap_servers,
                         kafka_cdc_db_topic,
-                        new Date().toString(),    // 消费者组ID使用当前时间
-                        OffsetsInitializer.earliest() // 从最早偏移量开始消费
+                        // 消费者组ID使用当前时间
+                        new Date().toString(),
+                        // 从最早偏移量开始消费
+                        OffsetsInitializer.earliest()
                 ),
                 // 定义水印策略（允许3秒的乱序）
                 WatermarkStrategy.<String>forBoundedOutOfOrderness(Duration.ofSeconds(3))
@@ -119,9 +125,10 @@ public class Tag_realtime {
                                     return 0L;
                                 }
                         ),
-                "kafka_cdc_db_source"  // 算子名称
+                // 算子名称
+                "kafka_cdc_db_source"
         ).uid("kafka_cdc_db_source").name("kafka_cdc_db_source");  // 设置算子UID和名称
-
+//        kafkaCdcDbSource.print();
         // 2. 从Kafka消费用户页面日志数据（结构与CDC数据类似）
         SingleOutputStreamOperator<String> kafkaPageLogSource = env.fromSource(
                         KafkaUtils.buildKafkaSecureSource(
@@ -148,7 +155,7 @@ public class Tag_realtime {
                         "kafka_page_log_source"
                 ).uid("kafka_page_log_source")
                 .name("kafka_page_log_source");
-
+//        kafkaPageLogSource.print();
         // 3. 数据转换：将Kafka消息字符串转为JSONObject
         SingleOutputStreamOperator<JSONObject> dataConvertJsonDs = kafkaCdcDbSource.map(JSON::parseObject)
                 .uid("convert json cdc db")
@@ -172,22 +179,52 @@ public class Tag_realtime {
 
         // 7. 2分钟滚动窗口处理：按用户分组后聚合数据
         SingleOutputStreamOperator<JSONObject> win2MinutesPageLogsDs = processStagePageLogDs.keyBy(data -> data.getString("uid"))
-                .process(new AggregateUserDataProcessFunction())  // 自定义聚合函数
+                // 自定义聚合函数
+                .process(new AggregateUserDataProcessFunction())
                 .keyBy(data -> data.getString("uid"))
-                .window(TumblingProcessingTimeWindows.of(Time.minutes(2))) // 2分钟滚动窗口
-                .reduce((value1, value2) -> value2)  // 保留最新值
+                // 2分钟滚动窗口
+                .window(TumblingProcessingTimeWindows.of(Time.minutes(2)))
+                // 保留最新值
+                .reduce((value1, value2) -> value2)
                 .uid("win 2 minutes page count msg")
                 .name("win 2 minutes page count msg");
-
+//        win2MinutesPageLogsDs.print();
         // 8. 应用设备和搜索评分模型
-        win2MinutesPageLogsDs.map(new MapDeviceAndSearchMarkModelFunc(dim_base_categories,device_rate_weight_coefficient,search_rate_weight_coefficient))
-                .print();  // 打印结果
+        SingleOutputStreamOperator<JSONObject> mapDeviceAndSearchRateResultDS = win2MinutesPageLogsDs.map(new MapDeviceAndSearchMarkModelFunc(dim_base_categories, LabelConfig.device_rate_weight_coefficient, LabelConfig.search_rate_weight_coefficient));
+
 
         // 9. 处理用户基本信息数据
         SingleOutputStreamOperator<JSONObject> userInfoDs = dataConvertJsonDs.filter(data -> data.getJSONObject("source").getString("table").equals("user_info"))
                 .uid("filter kafka user info")
                 .name("filter kafka user info");
 
+        SingleOutputStreamOperator<JSONObject> cdcOrderInfoDs = dataConvertJsonDs.filter(data -> data.getJSONObject("source").getString("table").equals("order_info"))
+                .uid("filter kafka order info")
+                .name("filter kafka order info");
+
+        SingleOutputStreamOperator<JSONObject> cdcOrderDetailDs = dataConvertJsonDs.filter(data -> data.getJSONObject("source").getString("table").equals("order_detail"))
+                .uid("filter kafka order detail")
+                .name("filter kafka order detail");
+
+        SingleOutputStreamOperator<JSONObject> mapCdcOrderInfoDs = cdcOrderInfoDs.map(new MapOrderInfoDataFunc());
+        SingleOutputStreamOperator<JSONObject> mapCdcOrderDetailDs = cdcOrderDetailDs.map(new MapOrderDetailFunc());
+
+        SingleOutputStreamOperator<JSONObject> filterNotNullCdcOrderInfoDs = mapCdcOrderInfoDs.filter(data -> data.getString("id") != null && !data.getString("id").isEmpty());
+        SingleOutputStreamOperator<JSONObject> filterNotNullCdcOrderDetailDs = mapCdcOrderDetailDs.filter(data -> data.getString("order_id") != null && !data.getString("order_id").isEmpty());
+
+        KeyedStream<JSONObject, String> keyedStreamCdcOrderInfoDs = filterNotNullCdcOrderInfoDs.keyBy(data -> data.getString("id"));
+        KeyedStream<JSONObject, String> keyedStreamCdcOrderDetailDs = filterNotNullCdcOrderDetailDs.keyBy(data -> data.getString("order_id"));
+
+        SingleOutputStreamOperator<JSONObject> processIntervalJoinOrderInfoAndDetailDs = keyedStreamCdcOrderInfoDs.intervalJoin(keyedStreamCdcOrderDetailDs)
+                .between(Time.minutes(-2), Time.minutes(2))
+                .process(new IntervalDbOrderInfoJoinOrderDetailProcessFunc());
+
+        SingleOutputStreamOperator<JSONObject> processDuplicateOrderInfoAndDetailDs = processIntervalJoinOrderInfoAndDetailDs.keyBy(data -> data.getString("detail_id"))
+                .process(new processOrderInfoAndDetailFunc());
+
+        // 品类 品牌 年龄 时间 base4
+        SingleOutputStreamOperator<JSONObject> mapOrderInfoAndDetailModelDs = processDuplicateOrderInfoAndDetailDs.map(new MapOrderAndDetailRateModelFunc(dim_base_categories, LabelConfig.time_rate_weight_coefficient, LabelConfig.amount_rate_weight_coefficient, LabelConfig.brand_rate_weight_coefficient, LabelConfig.category_rate_weight_coefficient));
+//        mapOrderInfoAndDetailModelDs.print();
         // 10. 转换用户信息：处理生日字段（从epochDay转为日期字符串）
         SingleOutputStreamOperator<JSONObject> finalUserInfoDs = userInfoDs.map(new RichMapFunction<JSONObject, JSONObject>() {
             @Override
@@ -203,12 +240,12 @@ public class Tag_realtime {
                 return jsonObject;
             }
         });
-
+//        finalUserInfoDs.print("a->");
         // 11. 过滤出用户补充信息数据
         SingleOutputStreamOperator<JSONObject> userInfoSupDs = dataConvertJsonDs.filter(data -> data.getJSONObject("source").getString("table").equals("user_info_sup_msg"))
                 .uid("filter kafka user info sup")
                 .name("filter kafka user info sup");
-
+//        userInfoSupDs.print();
         // 12. 转换用户基本信息：提取关键字段并计算年龄、星座等
         SingleOutputStreamOperator<JSONObject> mapUserInfoDs = finalUserInfoDs.map(new RichMapFunction<JSONObject, JSONObject>() {
                     @Override
@@ -251,6 +288,7 @@ public class Tag_realtime {
                 .uid("map userInfo ds")
                 .name("map userInfo ds");
 //        mapUserInfoDs.print();
+
         // 13. 转换用户补充信息：提取关键字段
         SingleOutputStreamOperator<JSONObject> mapUserInfoSupDs = userInfoSupDs.map(new RichMapFunction<JSONObject, JSONObject>() {
                     @Override
@@ -271,26 +309,46 @@ public class Tag_realtime {
                 })
                 .uid("sup userinfo sup")
                 .name("sup userinfo sup");
-//        mapUserInfoSupDs.print();
+//        mapUserInfoSupDs.print("a->");
+
         // 14. 过滤有效用户ID的数据
         SingleOutputStreamOperator<JSONObject> finalUserinfoDs = mapUserInfoDs.filter(data -> data.containsKey("uid") && !data.getString("uid").isEmpty());
         SingleOutputStreamOperator<JSONObject> finalUserinfoSupDs = mapUserInfoSupDs.filter(data -> data.containsKey("uid") && !data.getString("uid").isEmpty());
-
+//        finalUserinfoDs.print("1->");
+//        finalUserinfoSupDs.print("2->");
         // 15. 按用户ID分组
         KeyedStream<JSONObject, String> keyedStreamUserInfoDs = finalUserinfoDs.keyBy(data -> data.getString("uid"));
         KeyedStream<JSONObject, String> keyedStreamUserInfoSupDs = finalUserinfoSupDs.keyBy(data -> data.getString("uid"));
-
+//        keyedStreamUserInfoDs.print("1->");
+//        keyedStreamUserInfoSupDs.print("2->");
         // 16. 用户基本信息和补充信息的区间关联（5分钟时间窗口）
-//        {"birthday":"1997-09-06","decade":1990,"uname":"南宫纨","gender":"F","zodiac_sign":"处女座","weight":"53",
-//        "uid":"167","login_name":"4tjk9p8","unit_height":"cm","user_level":"1","phone_num":"13913669538","unit_weight":"kg",
-//        "email":"hij36hcc@3721.net","ts_ms":1747052360467,"age":27,"height":"167"}
         SingleOutputStreamOperator<JSONObject> processIntervalJoinUserInfo6BaseMessageDs = keyedStreamUserInfoDs.intervalJoin(keyedStreamUserInfoSupDs)
-                .between(Time.minutes(-5), Time.minutes(5))  // 前后5分钟的时间窗口
-                .process(new IntervalJoinUserInfoLabelProcessFunc())  // 自定义关联处理函数
+                // 前后5分钟的时间窗口
+                .between(Time.minutes(-5), Time.minutes(5))
+                // 自定义关联处理函数
+                .process(new IntervalJoinUserInfoLabelProcessFunc())
                 .uid("process intervalJoin order info")
                 .name("process intervalJoin order info");
-
-
+//        processIntervalJoinUserInfo6BaseMessageDs.print();
+//        // 将设备和搜索评分结果写入Kafka
+//        mapDeviceAndSearchRateResultDS.map(data->data.toJSONString())
+//                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base2_topic));
+//        // 将订单信息和详情模型结果写入Kafka
+//        mapOrderInfoAndDetailModelDs.map(data->data.toJSONString())
+//                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base4_topic));
+//        // 将用户基本信息和补充信息关联结果写入Kafka
+//        processIntervalJoinUserInfo6BaseMessageDs.map(data->data.toJSONString())
+//                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base6_topic));
+        // 将数据写入到CSV文件
+        processIntervalJoinUserInfo6BaseMessageDs.writeAsText("com/slh/output/output.csv").setParallelism(1);
+        mapOrderInfoAndDetailModelDs.writeAsText("com/slh/output/output.csv").setParallelism(1);
+        mapDeviceAndSearchRateResultDS.writeAsText("com/slh/output/output.csv").setParallelism(1);
+        // 打印用户基本信息和补充信息关联结果
+        processIntervalJoinUserInfo6BaseMessageDs.print();
+        // 打印订单信息和详情模型结果
+        mapOrderInfoAndDetailModelDs.print();
+        // 打印设备和搜索评分结果
+        mapDeviceAndSearchRateResultDS.print();
 
         // 执行Flink作业
         env.execute("DbusUserInfo6BaseLabel");
@@ -314,69 +372,19 @@ public class Tag_realtime {
     private static String getZodiacSign(LocalDate birthDate) {
         int month = birthDate.getMonthValue();
         int day = birthDate.getDayOfMonth();
-
         // 星座日期范围判断
         if ((month == 12 && day >= 22) || (month == 1 && day <= 19)) return "摩羯座";
-        else if (month == 1 || month == 2 && day <= 18) return "水瓶座";
-        else if (month == 2 || month == 3 && day <= 20) return "双鱼座";
-        else if (month == 3 || month == 4 && day <= 19) return "白羊座";
-        else if (month == 4 || month == 5 && day <= 20) return "金牛座";
-        else if (month == 5 || month == 6 && day <= 21) return "双子座";
-        else if (month == 6 || month == 7 && day <= 22) return "巨蟹座";
-        else if (month == 7 || month == 8 && day <= 22) return "狮子座";
-        else if (month == 8 || month == 9 && day <= 22) return "处女座";
-        else if (month == 9 || month == 10 && day <= 23) return "天秤座";
-        else if (month == 10 || month == 11 && day <= 22) return "天蝎座";
-        else return "射手座";
-    }
-    private static class AgePreferenceCoefficient {
-        private static final Map<String, Map<String, Double>> agePreferenceMap = new HashMap<>();
-
-        static {
-            // 初始化潮流服饰的年龄偏好系数
-            Map<String, Double> fashionMap = new HashMap<>();
-            fashionMap.put("18-24", 0.9);
-            fashionMap.put("25-29", 0.8);
-            fashionMap.put("30-34", 0.6);
-            fashionMap.put("35-39", 0.4);
-            fashionMap.put("40-49", 0.2);
-            fashionMap.put("50+", 0.1);
-            agePreferenceMap.put("潮流服饰", fashionMap);
-
-            // 初始化家居用品的年龄偏好系数
-            Map<String, Double> homeMap = new HashMap<>();
-            homeMap.put("18-24", 0.2);
-            homeMap.put("25-29", 0.4);
-            homeMap.put("30-34", 0.6);
-            homeMap.put("35-39", 0.8);
-            homeMap.put("40-49", 0.9);
-            homeMap.put("50+", 0.7);
-            agePreferenceMap.put("家居用品", homeMap);
-
-            // 初始化健康食品的年龄偏好系数
-            Map<String, Double> healthMap = new HashMap<>();
-            healthMap.put("18-24", 0.1);
-            healthMap.put("25-29", 0.2);
-            healthMap.put("30-34", 0.4);
-            healthMap.put("35-39", 0.6);
-            healthMap.put("40-49", 0.8);
-            healthMap.put("50+", 0.9);
-            agePreferenceMap.put("健康食品", healthMap);
-        }
-
-        public static double getPreference(String category, String ageGroup) {
-            return agePreferenceMap.getOrDefault(category, new HashMap<>())
-                    .getOrDefault(ageGroup, 0.0);
-        }
-
-        public static String getAgeGroup(int age) {
-            if (age >= 18 && age <= 24) return "18-24";
-            else if (age >= 25 && age <= 29) return "25-29";
-            else if (age >= 30 && age <= 34) return "30-34";
-            else if (age >= 35 && age <= 39) return "35-39";
-            else if (age >= 40 && age <= 49) return "40-49";
-            else if (age >= 50) return "50+";
-            else return "unknown";
-        }
+        else if ((month == 1 && day >= 20) || (month == 2 && day <= 18)) return "水瓶座";
+        else if ((month == 2 && day >= 19) || (month == 3 && day <= 20)) return "双鱼座";
+        else if ((month == 3 && day >= 21) || (month == 4 && day <= 19)) return "白羊座";
+        else if ((month == 4 && day >= 20) || (month == 5 && day <= 20)) return "金牛座";
+        else if ((month == 5 && day >= 21) || (month == 6 && day <= 21)) return "双子座";
+        else if ((month == 6 && day >= 22) || (month == 7 && day <= 22)) return "巨蟹座";
+        else if ((month == 7 && day >= 23) || (month == 8 && day <= 22)) return "狮子座";
+        else if ((month == 8 && day >= 23) || (month == 9 && day <= 22)) return "处女座";
+        else if ((month == 9 && day >= 23) || (month == 10 && day <= 22)) return "天秤座";
+        else if ((month == 10 && day >= 23) || (month == 11 && day <= 22)) return "天蝎座";
+        else if ((month == 11 && day >= 23) || (month == 12 && day <= 21)) return "射手座";
+        else return "未知";
     }
 }

@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Properties;
 
 /**
@@ -19,12 +20,18 @@ public final class ConfigUtils {
     private static Properties properties;
 
     static {
-        try {
-            properties = new Properties();
-            properties.load(ConfigUtils.class.getClassLoader().getResourceAsStream("common-config.properties"));
+//        try {
+//            properties = new Properties();
+//            properties.load(ConfigUtils.class.getClassLoader().getResourceAsStream("common-config.properties"));
+//        } catch (IOException e) {
+//            logger.error("加载配置文件出错, exit 1", e);
+//            System.exit(1);
+//        }
+        Properties props = new Properties();
+        try (InputStream is = ConfigUtils.class.getClassLoader().getResourceAsStream("config.properties")) {
+            props.load(is); // 如果 is == null，将抛出 NullPointerException
         } catch (IOException e) {
-            logger.error("加载配置文件出错, exit 1", e);
-            System.exit(1);
+            throw new RuntimeException("Failed to load config file", e);
         }
     }
 

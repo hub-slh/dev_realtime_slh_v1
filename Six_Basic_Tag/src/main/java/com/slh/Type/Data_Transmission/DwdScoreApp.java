@@ -21,8 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * @Package com.lzy.app.dwd.DwdScoreApp
- * @Author zheyuan.liu
+ * @Package com.slh.Type.Data_Transmission
+ * @Author song.lihao
  * @Date 2025/5/14 14:46
  * @description:
  */
@@ -33,32 +33,29 @@ public class DwdScoreApp {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         // 并行度设置
         env.setParallelism(1);
-        // 从 kafka 获取日志数据源
-        KafkaSource<String> kafkaSourceLog = FlinkSourceUtil.getKafkaSource("topic_log", "page_Log");
-
+        // 从 kafka 获取日志数据源 主题为 topic_log 消费者组为 pagr_Log
+        KafkaSource<String> kafkaSourceLog = FlinkSourceUtil.getKafkaSource("minutes_page_Log", "page_Log");
+        // 创建 Kafka 数据源
         SingleOutputStreamOperator<String> kafka_source_log = env.fromSource(kafkaSourceLog, WatermarkStrategy.noWatermarks(), "Kafka Source");
         // 将 JSON 字符串转换为 JSONObject
         SingleOutputStreamOperator<JSONObject> streamOperatorlog = kafka_source_log.map(JSON::parseObject);
-        // 使用 RichMapFunction 进行数据转换和评分计算
+        // 使用 RichMapFunction 进行数据映射和评分计算
         SingleOutputStreamOperator<JSONObject> operator = streamOperatorlog.map(new RichMapFunction<JSONObject, JSONObject>() {
-
             private List<DimBaseCategory> dim_base_categories;// 基础分类维度数据
             private Map<String, DimBaseCategory> categoryMap;// 分类名称到分类对象的映射
             private List<DimCategoryCompare> dimCategoryCompares;// 分类比较维度数据
             private Connection connection;// 数据库连接
-
+            // 评分权重
             final double deviceRate = 0.1;// 设备类型权重
             final double searchRate = 0.15;// 搜索行为权重
             final double timeRate = 0.1;// 时间权重
-
             @Override
             public void open(Configuration parameters) throws Exception {
                 // 初始化 Map
                 categoryMap = new HashMap<>();
-
                 // 获取数据库连接
                 connection = JdbcUtil.getMySQLConnection();
-                // 查询三级分类数据
+                // 查询三级分类数据(包含一级、二级、三级分类名称)
                 String sql1 = "select b3.id,                          \n" +
                         "            b3.name as b3name,              \n" +
                         "            b2.name as b2name,              \n" +
@@ -72,33 +69,30 @@ public class DwdScoreApp {
                 // 查询分类比较字典数据
                 String sql2 = "select id, category_name, search_category from dev_realtime_v1.category_compare_dic;";
                 dimCategoryCompares = JdbcUtil.queryList(connection, sql2, DimCategoryCompare.class, false);
-
-                // 在 open 方法中初始化 categoryMap
+                // 构建分类名称到分类对象的映射，提高查询效率
                 for (DimBaseCategory category : dim_base_categories) {
                     categoryMap.put(category.getB3name(), category);
                 }
-
                 super.open(parameters);
             }
-
             @Override
             public JSONObject map(JSONObject jsonObject) {
                 // 处理操作系统的字段
                 String os = jsonObject.getString("os");
                 // 判断 os 是否为空
                 if (os == null || os.isEmpty()) {
-                    // 可选：记录日志、输出到侧输出流等
-                    return jsonObject; // 或 throw new RuntimeException("os is null or empty");
+                    // 记录日志、输出到侧输出流等
+                    return jsonObject; // 如果为空直接返回原数据
                 }
                 // 取第一个操作系统标签作为判断依据
                 String[] labels = os.split(",");
                 if (labels.length == 0) {
                     return jsonObject;
                 }
-
                 String judge_os = labels[0];
                 jsonObject.put("judge_os", judge_os);
                 // 根据操作系统类型计算设备评分
+                // 设备评分
                 if (judge_os.equals("iOS")) {
                     // IOS 设备各年龄段评分
                     jsonObject.put("device_18_24", round(0.7 * deviceRate));
@@ -122,7 +116,7 @@ public class DwdScoreApp {
                     // 根据搜索词查找对应的分类
                     DimBaseCategory category = categoryMap.get(searchItem);
                     if (category != null) {
-                        jsonObject.put("b1_category", category.getB1name());
+                        jsonObject.put("b1_category", category.getB1name()); // 设置一级分类名称
                     }
                 }
                 // 根据一级分类查找搜索分类
@@ -141,6 +135,7 @@ public class DwdScoreApp {
                     searchCategory = "unknown";
                 }
                 // 不同搜索分类对应不同年龄段的评分
+                // 搜索词分析
                 switch (searchCategory) {
                     case "时尚与潮流":
                         jsonObject.put("search_18_24", round(0.9 * searchRate));
@@ -199,8 +194,6 @@ public class DwdScoreApp {
                         jsonObject.put("search_40_49", 0);
                         jsonObject.put("search_50", 0);
                 }
-
-
                 return jsonObject;
             }
             // 四舍五入保留3位小数
@@ -209,17 +202,13 @@ public class DwdScoreApp {
                         .setScale(3, RoundingMode.HALF_UP)
                         .doubleValue();
             }
-
             @Override
             public void close() throws Exception {
                 // 关闭数据库连接
                 super.close();
             }
         });
-
         operator.print();
-
-
         env.execute("minutes_page_Log");
     }
 }
