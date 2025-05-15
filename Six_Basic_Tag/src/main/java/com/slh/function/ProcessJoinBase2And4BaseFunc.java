@@ -38,28 +38,28 @@ public class ProcessJoinBase2And4BaseFunc extends ProcessJoinFunction<JSONObject
 
         JSONObject payTimeWeight = new JSONObject();
         for (String s : list4) {
-            double v = left.getDoubleValue("pay_time_" + s);
+            double v = right.getDoubleValue("pay_time_" + s);
             String s1 = s.replace("-", "_");
             payTimeWeight.put(s1, v);
         }
 
         JSONObject b1nameWeight = new JSONObject();
         for (String s : list4) {
-            double v = left.getDoubleValue("b1name_" + s);
+            double v = right.getDoubleValue("b1name_" + s);
             String s1 = s.replace("-", "_");
             b1nameWeight.put(s1, v);
         }
 
         JSONObject tnameWeight = new JSONObject();
         for (String s : list4) {
-            double v = left.getDoubleValue("tname_" + s);
+            double v = right.getDoubleValue("tname_" + s);
             String s1 = s.replace("-", "_");
             tnameWeight.put(s1, v);
         }
 
         JSONObject amountWeight = new JSONObject();
         for (String s : list4) {
-            double v = left.getDoubleValue("amount_" + s);
+            double v = right.getDoubleValue("amount_" + s);
             String s1 = s.replace("-", "_");
             amountWeight.put(s1, v);
         }

@@ -240,7 +240,7 @@ public class Tag_realtime {
                 return jsonObject;
             }
         });
-//        finalUserInfoDs.print("a->");
+//        finalUserInfoDs.print();
         // 11. 过滤出用户补充信息数据
         SingleOutputStreamOperator<JSONObject> userInfoSupDs = dataConvertJsonDs.filter(data -> data.getJSONObject("source").getString("table").equals("user_info_sup_msg"))
                 .uid("filter kafka user info sup")
@@ -309,7 +309,7 @@ public class Tag_realtime {
                 })
                 .uid("sup userinfo sup")
                 .name("sup userinfo sup");
-//        mapUserInfoSupDs.print("a->");
+//        mapUserInfoSupDs.print();
 
         // 14. 过滤有效用户ID的数据
         SingleOutputStreamOperator<JSONObject> finalUserinfoDs = mapUserInfoDs.filter(data -> data.containsKey("uid") && !data.getString("uid").isEmpty());
