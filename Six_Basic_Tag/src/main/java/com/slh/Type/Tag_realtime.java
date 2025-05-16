@@ -330,19 +330,19 @@ public class Tag_realtime {
                 .uid("process intervalJoin order info")
                 .name("process intervalJoin order info");
 //        processIntervalJoinUserInfo6BaseMessageDs.print();
-//        // 将设备和搜索评分结果写入Kafka
-//        mapDeviceAndSearchRateResultDS.map(data->data.toJSONString())
-//                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base2_topic));
-//        // 将订单信息和详情模型结果写入Kafka
-//        mapOrderInfoAndDetailModelDs.map(data->data.toJSONString())
-//                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base4_topic));
-//        // 将用户基本信息和补充信息关联结果写入Kafka
-//        processIntervalJoinUserInfo6BaseMessageDs.map(data->data.toJSONString())
-//                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base6_topic));
-        // 将数据写入到CSV文件
-        processIntervalJoinUserInfo6BaseMessageDs.writeAsText("com/slh/output/output.csv").setParallelism(1);
-        mapOrderInfoAndDetailModelDs.writeAsText("com/slh/output/output.csv").setParallelism(1);
-        mapDeviceAndSearchRateResultDS.writeAsText("com/slh/output/output.csv").setParallelism(1);
+        // 将设备和搜索评分结果写入Kafka
+        mapDeviceAndSearchRateResultDS.map(data->data.toJSONString())
+                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base2_topic));
+        // 将订单信息和详情模型结果写入Kafka
+        mapOrderInfoAndDetailModelDs.map(data->data.toJSONString())
+                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base4_topic));
+        // 将用户基本信息和补充信息关联结果写入Kafka
+        processIntervalJoinUserInfo6BaseMessageDs.map(data->data.toJSONString())
+                .sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers, kafka_label_base6_topic));
+//        // 将数据写入到CSV文件
+//        processIntervalJoinUserInfo6BaseMessageDs.writeAsText("com/slh/output/output.csv").setParallelism(1);
+//        mapOrderInfoAndDetailModelDs.writeAsText("com/slh/output/output.csv").setParallelism(1);
+//        mapDeviceAndSearchRateResultDS.writeAsText("com/slh/output/output.csv").setParallelism(1);
         // 打印用户基本信息和补充信息关联结果
         processIntervalJoinUserInfo6BaseMessageDs.print();
         // 打印订单信息和详情模型结果

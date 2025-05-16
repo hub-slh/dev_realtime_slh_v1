@@ -41,7 +41,7 @@ public class Tag_realtime1 {
         // 获取 Flink 流处理执行环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         // 并行度
-        env.setParallelism(1);
+        env.setParallelism(2);
         // 从 Kafka 的 kafka_result_label_base6 主题读取数据
         SingleOutputStreamOperator<String> kafkaBase6Source = env.fromSource(
                 // 构建 Kafka 安全数据源

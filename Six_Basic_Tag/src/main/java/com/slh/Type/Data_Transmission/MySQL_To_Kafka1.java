@@ -22,7 +22,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * 2. 使用了Flink CDC连接器捕获MySQL变更
  * 3. 当前未设置水位线策略(WatermarkStrategy.noWatermarks())
  */
-public class MySQL_To_Kafka {
+public class MySQL_To_Kafka1 {
     public static void main(String[] args) throws Exception{
         // 创建流模型
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -33,11 +33,12 @@ public class MySQL_To_Kafka {
         // 创建数据源，但不设置水位线
         DataStreamSource<String> mySQLSource = env.fromSource(realtimeV1, WatermarkStrategy.noWatermarks(), "MySQL Source");
         // 输出读取到的数据
-        mySQLSource.print();
+//        mySQLSource.print();
         // 设置 Kafka 主题名称
         KafkaSink<String> topicDb = FlinkSinkUtil.getKafkaSink("topic_db_v1");
         // 将数据写入到 Kafka 中
         mySQLSource.sinkTo(topicDb);
+        mySQLSource.print();
         // 执行任务
         env.execute();
     }
