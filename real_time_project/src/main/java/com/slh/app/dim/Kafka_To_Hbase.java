@@ -161,7 +161,7 @@ public class Kafka_To_Hbase {
         SingleOutputStreamOperator<Tuple2<JSONObject,TableProcessDim>> dimDS = connectDS
                 .process(new TableProcessFunction(mapStateDescriptor));
 
-//        dimDS.print();
+        //dimDS.print();
         // 将处理后的数据写入Hbase
         dimDS.addSink(new HBaseSinkFunction());
 

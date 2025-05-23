@@ -46,7 +46,7 @@ import org.apache.hadoop.hbase.client.Connection;
  * 3. 使用广播状态共享维度表配置信息
  * 4. HBase表操作包括创建、删除和重建
  */
-public class Kafka_To_Hbase {
+public class Kafka_To_Hbase1 {
     public static void main(String[] args) throws Exception {
         // 初始化流环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
